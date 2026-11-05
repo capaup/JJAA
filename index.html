@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>설비지표 개선 리포트</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1c2430;--mute:#5b6675;--line:#e1e5ea;--blue:#2f6fd6;--red:#d6453d;--green:#2f9e6b;--amber:#d99a1e;--gray:#9aa5b4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161c;--card:#1b212a;--ink:#e8ecf1;--mute:#9aa6b6;--line:#2c3541;--blue:#6ea1f5;--red:#f0736b;--green:#52c48f;--amber:#f0bb4d;--gray:#6d7a8c}}
+:root[data-theme="dark"]{--bg:#12161c;--card:#1b212a;--ink:#e8ecf1;--mute:#9aa6b6;--line:#2c3541;--blue:#6ea1f5;--red:#f0736b;--green:#52c48f;--amber:#f0bb4d;--gray:#6d7a8c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic",system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 16px 56px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:36px 0 12px;padding-left:10px;border-left:4px solid var(--blue)}
+.sub{color:var(--mute);font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:20px}
+.kpi,.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+.kpi .l{font-size:13px;color:var(--mute)}.kpi .v{font-size:28px;font-weight:700;margin:2px 0}.kpi .s{font-size:12px;color:var(--mute)}
+.red{color:var(--red)}.green{color:var(--green)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:14px}
+@media(max-width:560px){.grid{grid-template-columns:1fr}}
+.card h3{margin:0 0 2px;font-size:15px}.card .note{font-size:13px;color:var(--mute);margin:8px 0 0}
+.box{position:relative;height:300px;margin-top:8px}.box.tall{height:360px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}th{color:var(--mute);font-weight:600}
+.scroll{overflow-x:auto}
+.hm{display:grid;gap:2px;font-size:11px}.hm div{padding:3px 0;text-align:center;border-radius:2px;color:#111}
+.hm .h{color:var(--mute);background:none}
+.assume{background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:14px;font-size:14px}
+.assume code{background:var(--bg);padding:2px 6px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>설비지표 개선 리포트</h1>
+<div class="sub">기간 2026-08-01 ~ 2026-10-31 (92일) · 대상 30대 · 가동율 / 정지로스율 / Run Down율</div>
+
+<div class="kpis" id="kpis"></div>
+
+<h2>1. 핵심 결과</h2>
+<div class="card" id="summary"></div>
+
+<h2>2. 개선 효과 산정 방식</h2>
+<div class="assume">
+ · 목표: 3개월 평균 정지로스율 5% 이상인 설비를 <b>5.0%</b>로 낮춤<br>
+ · 가동율 향상폭 = 현재 평균 정지로스율 − 5.0% (줄어든 정지로스가 그대로 가동으로 전환된다고 가정)<br>
+ · Wafer 증가량 = 가동율 향상폭 ÷ 0.1% × 99매 &nbsp;→ <code>예) 2.74%p ÷ 0.1 × 99 = 2,713매</code><br>
+ · 기준: 설비 1대당, 3개월(92일) 기간 / 월 환산 = 3개월 ÷ 3, 연 환산 = 3개월 × 4
+</div>
+
+<h2>3. 정지로스 5% 이상 설비 상세</h2>
+<div class="card scroll"><table id="tbl"></table>
+<p class="note" id="tblnote"></p></div>
+
+<h2>4. 개선 효과 그래프</h2>
+<div class="grid">
+ <div class="card"><h3>설비별 평균 정지로스율</h3><div class="box tall"><canvas id="c1"></canvas></div><p class="note" id="n1"></p></div>
+ <div class="card"><h3>5% 이상 설비 개선 전후 (현재 vs 목표 5%)</h3><div class="box tall"><canvas id="c3"></canvas></div><p class="note" id="n3"></p></div>
+ <div class="card"><h3>설비별 Wafer 증가량 · 누적 기여도 (파레토)</h3><div class="box"><canvas id="c4"></canvas></div><p class="note" id="n4"></p></div>
+ <div class="card"><h3>5% 이상 7대 개선 전 · 후 가동율</h3><div class="box"><canvas id="c13"></canvas></div><p class="note" id="n13"></p></div>
+</div>
+
+<h2>5. 설비 현황 그래프</h2>
+<div class="grid">
+ <div class="card"><h3>설비별 가동율 · 정지로스율 · Run Down율 (100% 누적)</h3><div class="box tall"><canvas id="c2"></canvas></div><p class="note" id="n2"></p></div>
+ <div class="card"><h3>전체 구성비 (30대 평균)</h3><div class="box tall"><canvas id="c10"></canvas></div><p class="note" id="n10"></p></div>
+ <div class="card"><h3>정지로스 vs Run Down 산점도 (설비별 평균)</h3><div class="box"><canvas id="c12"></canvas></div><p class="note" id="n12"></p></div>
+ <div class="card"><h3>설비별 5% 초과 일수 비중</h3><div class="box"><canvas id="c11"></canvas></div><p class="note" id="n11"></p></div>
+</div>
+
+<h2>6. 추이 · 분포 그래프</h2>
+<div class="grid">
+ <div class="card"><h3>전체 설비 일별 평균 추이</h3><div class="box"><canvas id="c5"></canvas></div><p class="note" id="n5"></p></div>
+ <div class="card"><h3>5% 이상 7대 일별 정지로스율</h3><div class="box"><canvas id="c6"></canvas></div><p class="note" id="n6"></p></div>
+ <div class="card"><h3>정지로스율 분포 (일별 값, %)</h3><div class="box"><canvas id="c8"></canvas></div><p class="note" id="n8"></p></div>
+ <div class="card"><h3>월별 평균 정지로스율 (7대 vs 나머지 23대)</h3><div class="box"><canvas id="c9"></canvas></div><p class="note" id="n9"></p></div>
+</div>
+
+<h2>7. 설비 × 주차 정지로스율 히트맵</h2>
+<div class="card scroll"><div class="hm" id="hm"></div><p class="note" id="n7"></p></div>
+</div>
+
+<script>
+const D={"D": ["08-01", "08-02", "08-03", "08-04", "08-05", "08-06", "08-07", "08-08", "08-09", "08-10", "08-11", "08-12", "08-13", "08-14", "08-15", "08-16", "08-17", "08-18", "08-19", "08-20", "08-21", "08-22", "08-23", "08-24", "08-25", "08-26", "08-27", "08-28", "08-29", "08-30", "08-31", "09-01", "09-02", "09-03", "09-04", "09-05", "09-06", "09-07", "09-08", "09-09", "09-10", "09-11", "09-12", "09-13", "09-14", "09-15", "09-16", "09-17", "09-18", "09-19", "09-20", "09-21", "09-22", "09-23", "09-24", "09-25", "09-26", "09-27", "09-28", "09-29", "09-30", "10-01", "10-02", "10-03", "10-04", "10-05", "10-06", "10-07", "10-08", "10-09", "10-10", "10-11", "10-12", "10-13", "10-14", "10-15", "10-16", "10-17", "10-18", "10-19", "10-20", "10-21", "10-22", "10-23", "10-24", "10-25", "10-26", "10-27", "10-28", "10-29", "10-30", "10-31"], "eq": [{"id": "EQ-01", "run": 89.7, "stop": 5.77, "rd": 4.53, "smax": 12.3, "smin": 2, "over": 52, "high": true, "gain": 0.77, "wafer": 764, "weeks": [6.21, 4.86, 6.49, 6.14, 6.13, 6.14, 5.6, 5.39, 6.54, 5.06, 5.24, 6.39, 4.96], "months": [6.23, 5.63, 5.45]}, {"id": "EQ-02", "run": 91.63, "stop": 3.8, "rd": 4.57, "smax": 8.1, "smin": 2, "over": 14, "high": false, "gain": 0.0, "wafer": 0, "weeks": [4.46, 3.23, 3.53, 3.41, 3.61, 3.29, 3.96, 4.23, 4.24, 3.6, 3.63, 3.9, 4.26], "months": [3.64, 3.87, 3.89]}, {"id": "EQ-03", "run": 91.88, "stop": 3.28, "rd": 4.84, "smax": 6.1, "smin": 2, "over": 9, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.4, 2.9, 3.67, 3.03, 3.14, 3.53, 3.3, 2.77, 2.99, 3.46, 3.5, 3.31, 3.6], "months": [3.23, 3.11, 3.49]}, {"id": "EQ-04", "run": 89.69, "stop": 5.61, "rd": 4.71, "smax": 14.6, "smin": 2, "over": 48, "high": true, "gain": 0.61, "wafer": 599, "weeks": [6.84, 4.11, 4.37, 6.39, 5.71, 5.03, 3.41, 6.64, 5.57, 6.87, 6.1, 6.74, 5.14], "months": [5.59, 5.16, 6.05]}, {"id": "EQ-05", "run": 91.39, "stop": 3.9, "rd": 4.71, "smax": 7.5, "smin": 2, "over": 21, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.96, 2.79, 3.27, 4.97, 3.86, 3.96, 3.66, 3.79, 4.11, 4.24, 3.69, 4.46, 3.96], "months": [3.66, 4.01, 4.04]}, {"id": "EQ-06", "run": 92.15, "stop": 3.09, "rd": 4.76, "smax": 6.3, "smin": 2, "over": 6, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.19, 3.56, 2.51, 3.6, 3.63, 3.93, 2.5, 3.71, 2.47, 2.69, 3.07, 2.8, 2.61], "months": [3.26, 3.18, 2.84]}, {"id": "EQ-07", "run": 91.37, "stop": 4.02, "rd": 4.61, "smax": 8.1, "smin": 2, "over": 21, "high": false, "gain": 0.0, "wafer": 0, "weeks": [4.17, 3.96, 4.31, 4.47, 3.43, 4.4, 3.77, 2.94, 4.67, 4.06, 3.73, 4.13, 4.24], "months": [4.15, 3.75, 4.16]}, {"id": "EQ-08", "run": 89.13, "stop": 6.25, "rd": 4.62, "smax": 12.2, "smin": 2, "over": 70, "high": true, "gain": 1.25, "wafer": 1242, "weeks": [6.46, 6.29, 7.07, 6.29, 5.44, 5.9, 6.31, 7.1, 5.09, 6.77, 6.46, 5.5, 6.59], "months": [6.31, 6.13, 6.33]}, {"id": "EQ-09", "run": 89.31, "stop": 6.4, "rd": 4.28, "smax": 11.9, "smin": 2, "over": 63, "high": true, "gain": 1.4, "wafer": 1390, "weeks": [6.97, 6.79, 5.81, 6.23, 6.06, 6.89, 5.49, 7.56, 6.2, 6.67, 7.1, 6.04, 5.58], "months": [6.47, 6.4, 6.34]}, {"id": "EQ-10", "run": 92.46, "stop": 3.18, "rd": 4.37, "smax": 7.8, "smin": 2, "over": 7, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.63, 2.66, 3.21, 3.47, 3.2, 4.13, 3.33, 3.09, 2.61, 3.36, 3.21, 2.99, 2.52], "months": [3.18, 3.4, 2.96]}, {"id": "EQ-11", "run": 91.81, "stop": 3.63, "rd": 4.56, "smax": 6.8, "smin": 2, "over": 14, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.4, 4.03, 4.03, 2.74, 3.2, 4.36, 4.91, 3.69, 3.31, 3.64, 3.41, 2.94, 3.49], "months": [3.6, 3.94, 3.35]}, {"id": "EQ-12", "run": 91.7, "stop": 3.54, "rd": 4.76, "smax": 7.1, "smin": 2, "over": 18, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.31, 4.31, 3.47, 3.26, 4.71, 3.3, 3.24, 3.93, 3.11, 3.23, 3.66, 3.06, 3.48], "months": [3.63, 3.69, 3.31]}, {"id": "EQ-13", "run": 91.67, "stop": 4.03, "rd": 4.3, "smax": 7.1, "smin": 2, "over": 25, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.79, 2.54, 4.14, 4.01, 4.69, 2.96, 3.57, 4.76, 3.8, 5.07, 5.16, 4.0, 3.89], "months": [3.8, 3.82, 4.46]}, {"id": "EQ-14", "run": 91.17, "stop": 4.27, "rd": 4.56, "smax": 7.6, "smin": 2, "over": 29, "high": false, "gain": 0.0, "wafer": 0, "weeks": [4.87, 4.29, 4.86, 4.51, 3.79, 4.07, 4.37, 4.59, 3.73, 4.13, 4.29, 3.63, 4.36], "months": [4.58, 4.06, 4.15]}, {"id": "EQ-15", "run": 91.49, "stop": 3.8, "rd": 4.71, "smax": 6.8, "smin": 2, "over": 14, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.36, 4.26, 4.11, 4.4, 3.84, 3.29, 4.0, 3.69, 4.06, 4.04, 3.51, 3.4, 3.49], "months": [3.99, 3.8, 3.61]}, {"id": "EQ-16", "run": 90.76, "stop": 4.57, "rd": 4.67, "smax": 8.3, "smin": 2, "over": 39, "high": false, "gain": 0.0, "wafer": 0, "weeks": [4.99, 4.44, 4.41, 5.07, 5.37, 4.71, 4.01, 3.36, 4.34, 3.19, 4.76, 5.67, 5.0], "months": [4.8, 4.25, 4.65]}, {"id": "EQ-17", "run": 92.63, "stop": 3.03, "rd": 4.34, "smax": 7.4, "smin": 2, "over": 5, "high": false, "gain": 0.0, "wafer": 0, "weeks": [2.57, 4.19, 2.94, 2.74, 2.79, 2.94, 3.14, 3.23, 3.01, 2.93, 3.24, 2.99, 2.71], "months": [3.05, 3.15, 2.9]}, {"id": "EQ-18", "run": 92.53, "stop": 2.8, "rd": 4.67, "smax": 6.6, "smin": 2, "over": 4, "high": false, "gain": 0.0, "wafer": 0, "weeks": [2.5, 2.77, 2.56, 2.23, 2.56, 2.89, 2.79, 2.66, 3.04, 3.07, 2.71, 2.71, 3.79], "months": [2.58, 2.67, 3.15]}, {"id": "EQ-19", "run": 92.39, "stop": 2.9, "rd": 4.71, "smax": 7, "smin": 2, "over": 5, "high": false, "gain": 0.0, "wafer": 0, "weeks": [2.43, 2.6, 3.06, 3.66, 2.4, 2.6, 2.87, 2.69, 3.01, 2.53, 3.44, 2.6, 3.73], "months": [2.88, 2.74, 3.08]}, {"id": "EQ-20", "run": 91.58, "stop": 4.08, "rd": 4.35, "smax": 7.6, "smin": 2, "over": 24, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.67, 3.63, 4.11, 4.51, 4.17, 4.4, 3.34, 4.67, 4.6, 3.24, 4.59, 3.67, 4.34], "months": [4.04, 4.19, 4.01]}, {"id": "EQ-21", "run": 89.94, "stop": 5.46, "rd": 4.6, "smax": 12.3, "smin": 2, "over": 50, "high": true, "gain": 0.46, "wafer": 452, "weeks": [5.89, 6.01, 5.39, 5.86, 5.31, 3.46, 7.47, 5.16, 4.04, 5.44, 5.34, 5.89, 5.65], "months": [5.84, 5.13, 5.39]}, {"id": "EQ-22", "run": 92.06, "stop": 3.15, "rd": 4.79, "smax": 6.8, "smin": 2, "over": 7, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.16, 2.8, 3.4, 2.79, 3.71, 2.57, 3.36, 3.31, 3.81, 2.67, 3.23, 3.0, 3.12], "months": [3.13, 3.28, 3.04]}, {"id": "EQ-23", "run": 91.52, "stop": 3.99, "rd": 4.49, "smax": 7.3, "smin": 2, "over": 23, "high": false, "gain": 0.0, "wafer": 0, "weeks": [2.73, 3.74, 4.36, 3.76, 4.36, 4.91, 3.66, 4.47, 4.31, 4.4, 3.73, 4.06, 3.46], "months": [3.73, 4.31, 3.94]}, {"id": "EQ-24", "run": 87.87, "stop": 7.74, "rd": 4.38, "smax": 15, "smin": 2.6, "over": 76, "high": true, "gain": 2.74, "wafer": 2717, "weeks": [5.87, 10.14, 7.69, 7.6, 7.63, 7.96, 8.1, 8.7, 8.24, 7.36, 7.93, 6.76, 6.84], "months": [7.83, 8.13, 7.29]}, {"id": "EQ-25", "run": 88.79, "stop": 6.7, "rd": 4.52, "smax": 12.8, "smin": 2, "over": 69, "high": true, "gain": 1.7, "wafer": 1680, "weeks": [6.2, 5.8, 4.84, 5.1, 7.2, 6.74, 6.81, 7.26, 6.49, 7.17, 7.69, 8.07, 7.56], "months": [5.62, 6.95, 7.53]}, {"id": "EQ-26", "run": 92.83, "stop": 2.93, "rd": 4.23, "smax": 6.2, "smin": 2, "over": 2, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.21, 3.04, 2.83, 3.01, 2.76, 2.49, 2.8, 3.67, 3.07, 2.13, 2.84, 3.23, 3.0], "months": [2.99, 2.99, 2.82]}, {"id": "EQ-27", "run": 91.99, "stop": 3.45, "rd": 4.56, "smax": 7, "smin": 2, "over": 10, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.31, 3.89, 3.7, 3.4, 4.03, 3.07, 3.51, 3.17, 3.1, 3.96, 3.01, 3.79, 2.99], "months": [3.69, 3.28, 3.38]}, {"id": "EQ-28", "run": 92.04, "stop": 3.65, "rd": 4.31, "smax": 7.7, "smin": 2, "over": 15, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.94, 3.17, 2.83, 4.04, 3.11, 3.0, 4.86, 4.23, 4.3, 3.66, 4.09, 3.23, 3.04], "months": [3.43, 4.02, 3.5]}, {"id": "EQ-29", "run": 92.5, "stop": 3.06, "rd": 4.44, "smax": 7.4, "smin": 2, "over": 7, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.17, 4.14, 2.8, 3.31, 2.17, 3.53, 4.04, 2.63, 2.79, 2.77, 2.51, 3.04, 2.91], "months": [3.23, 3.18, 2.78]}, {"id": "EQ-30", "run": 91.37, "stop": 4.15, "rd": 4.48, "smax": 7.7, "smin": 2, "over": 18, "high": false, "gain": 0.0, "wafer": 0, "weeks": [3.17, 4.04, 5.6, 3.9, 4.13, 4.66, 4.41, 4.14, 4.1, 4.01, 3.31, 4.67, 3.81], "months": [4.07, 4.42, 3.96]}], "hiStop": {"EQ-01": [9, 8.2, 2.6, 4.8, 6.8, 6, 6.1, 9.1, 2.1, 4.3, 5, 3.3, 3.8, 6.4, 8.6, 2.7, 7.2, 8, 5.5, 7.5, 5.9, 4.6, 4, 7.4, 4.7, 7.4, 8.4, 6.5, 9.8, 9.8, 7.6, 6.8, 2.2, 2, 4.7, 7, 9.1, 7.3, 6.8, 2, 8.8, 2, 3.8, 7.6, 6.5, 4.5, 3.5, 8.7, 4.6, 2.1, 9, 7.3, 3.9, 5.4, 3.8, 6.2, 9.2, 4, 6.2, 7.9, 5.9, 4.9, 7.7, 2, 5, 6.3, 8.5, 4.1, 5.4, 4.1, 2, 5.8, 4.9, 4.7, 8.4, 8.9, 2, 4.8, 2.8, 7.2, 2, 12.3, 7.6, 8, 5.9, 2, 6.6, 7, 4.3, 2.7, 3.2, 8], "EQ-04": [10.1, 2, 9.4, 7.5, 5.2, 9, 4.7, 6.1, 3.7, 8.8, 2, 4.2, 2, 2, 2.4, 5.7, 4.2, 4.3, 4.7, 3.6, 5.7, 6.6, 9.7, 4.9, 5.2, 4.4, 6.6, 7.3, 7.7, 5.9, 7.7, 6.3, 3.8, 6.3, 2.3, 7.5, 6.2, 6.9, 3.6, 3.9, 4.3, 2.8, 3.9, 4.6, 3.7, 3.4, 2.8, 2, 3.5, 6, 4.6, 5.2, 12.5, 3, 3.6, 11.6, 4.5, 2.9, 2.4, 14.6, 6.2, 4.6, 3.8, 7.1, 4.4, 9.2, 10.2, 6.2, 5.3, 5.7, 8.4, 2.3, 10.9, 4.6, 5.4, 2, 9.1, 3, 6.1, 10, 5.8, 7.1, 5.5, 9.7, 5.9, 2, 6.2, 6.4, 5, 5, 5.7, 4.9], "EQ-08": [2, 5.3, 8.7, 7.1, 5.8, 5.9, 10.4, 8.4, 3.2, 4.4, 6.7, 8, 8.1, 5.2, 7.8, 5.4, 7.9, 10.2, 6.3, 2.2, 9.7, 4.4, 5.6, 4, 6.5, 8.6, 5.8, 9.1, 5.1, 4.6, 3.1, 10.4, 2, 7.3, 5.6, 2.2, 5.6, 7.9, 6.1, 7.1, 9.1, 3.3, 9.5, 6.7, 2.9, 4.4, 5.9, 8, 6.8, 9.6, 6.4, 9.5, 8.5, 5.6, 6.6, 3.5, 5.7, 2.3, 2.4, 7.4, 5.5, 7.5, 4.8, 5.9, 12.2, 2, 9.3, 5.6, 6.9, 5.5, 6.7, 5.6, 7.7, 6.4, 5.7, 5.7, 7.4, 7.8, 5.5, 6.6, 2.6, 2, 9.5, 4.5, 9.4, 6.7, 6, 6.6, 5.8, 3.3, 5.7, 9.2], "EQ-09": [7.3, 7.4, 5.5, 8, 7.7, 4.3, 8.6, 9.1, 4.7, 4.6, 10.3, 8.4, 6.6, 3.8, 6.3, 2.5, 8.3, 4.4, 3, 6.6, 9.6, 2.8, 11.9, 10, 3.8, 3.4, 9, 2.7, 2, 10.3, 7.7, 3.7, 5.4, 8.2, 5.1, 6, 9, 2.8, 9.7, 3.7, 9.7, 7.3, 6.6, 6, 7.7, 5.7, 2, 8.4, 2, 10, 10.7, 3.6, 4.7, 11.2, 7.1, 5.6, 5.7, 7.1, 4.5, 3.2, 9.7, 7.5, 5.7, 2.2, 5.4, 6.8, 7.8, 7.3, 9.3, 7.9, 3.6, 6, 8.6, 6.5, 9.9, 9.7, 5.4, 3.7, 6.5, 7.4, 6.7, 5.2, 4.9, 7.9, 2.9, 9.4, 8.9, 3.8, 5.9, 5.5, 3.2, 5], "EQ-21": [2.3, 4.5, 7.1, 6.6, 5.8, 9.8, 5.1, 5.8, 6.2, 7.9, 2.6, 7.6, 6.9, 5.1, 4.2, 9.8, 5, 2, 8.3, 3.6, 4.8, 6.4, 4.4, 6.7, 3.2, 6.3, 5.1, 8.9, 7.7, 6.9, 4.4, 6.7, 4.8, 4.7, 2, 4.9, 3.9, 2.3, 4.2, 2, 2, 4.9, 7.9, 6.9, 9.5, 7.7, 3.3, 12.3, 4.7, 3.6, 5.5, 8.1, 2.6, 4.2, 8.1, 4, 2.9, 5.3, 2, 6.4, 6.4, 3.3, 2, 3.3, 9.6, 5.9, 2, 6.5, 5.9, 4.9, 2.1, 7.5, 3.9, 9.2, 5.6, 2.8, 6.3, 3.4, 9.5, 3.3, 5.8, 6.5, 7.4, 5.3, 4.3, 3.1, 8, 5.8, 9.1, 5.8, 3, 6.1], "EQ-24": [3.2, 2.6, 7.3, 5.9, 6.7, 6, 9.4, 14, 5.2, 12.7, 11.6, 12.1, 7.7, 7.7, 9.4, 8, 4.2, 6.5, 5.4, 8, 12.3, 10.4, 6.1, 5.3, 11.4, 5, 6.7, 8.3, 10.3, 7.4, 5.9, 6.4, 10.3, 4, 9.1, 7.7, 6.7, 9, 12, 8.1, 8.1, 4.1, 7.4, 6.3, 9.3, 4.7, 8.5, 6.2, 14.3, 7, 10.7, 8.5, 6.9, 4.6, 15, 8.2, 7.1, 6.9, 7.4, 10.8, 8.6, 9.3, 7.6, 4.1, 6.6, 6.9, 4.3, 5.7, 11.9, 12, 11, 3.8, 7.6, 5.9, 8.2, 7.4, 11.6, 7.1, 5, 5.4, 8, 7.8, 4.5, 9.5, 5, 3.9, 5.7, 12.2, 6.8, 8.6, 5, 7.5], "EQ-25": [6.7, 10.1, 6.4, 7.9, 3.3, 6.4, 2.6, 6.9, 7.6, 2.3, 5.5, 5.6, 2.7, 10, 6.6, 4.2, 5.1, 6.4, 5.9, 3.7, 2, 7.3, 3.4, 7.2, 3.8, 3.2, 5.6, 5.2, 8.8, 4.9, 6.8, 8.4, 4.5, 7.7, 9.3, 10.6, 6.6, 7.7, 6.6, 4.5, 4.8, 6.4, 9.5, 7.4, 5.2, 9, 4.4, 7.6, 4.6, 6.7, 9.3, 7, 6.5, 7.6, 8.3, 5.4, 3.5, 6.6, 8.4, 7.6, 6.8, 7.9, 4.6, 9, 4.7, 9.9, 6.6, 10.8, 7.2, 2, 7.9, 9.8, 9.8, 10.4, 6, 3.6, 6.3, 10.9, 6.2, 8.9, 12.7, 6.5, 8.5, 2.8, 10.3, 6.9, 12.8, 6.2, 7.8, 5.3, 6.3, 4.9]}, "daily": {"run": [91.58, 91.02, 91.12, 91.5, 90.48, 91.23, 91.07, 90.49, 91.35, 90.79, 90.52, 91.74, 91.62, 91.8, 90.62, 90.76, 91.35, 90.86, 91.85, 91.37, 90.7, 91.02, 92.05, 90.94, 91.27, 91.35, 91.3, 91.14, 91.24, 90.73, 91.6, 90.68, 91.27, 91.6, 91.24, 91.23, 91.06, 91.61, 91.75, 91.2, 91.27, 91.9, 90.81, 91.27, 90.35, 91.92, 91.42, 91.26, 90.9, 91.68, 90.58, 90.64, 91.54, 91.15, 90.37, 91.89, 91.49, 90.79, 91.71, 91.52, 91.18, 90.87, 91.4, 91.53, 90.78, 90.83, 91.55, 92.28, 90.96, 91.44, 91.23, 91.64, 90.79, 91.26, 91.03, 90.85, 91.96, 90.85, 92.15, 91.63, 91.55, 91.47, 91.26, 90.99, 91.56, 91.62, 90.63, 91.81, 90.83, 91.1, 92.23, 90.69], "stop": [3.78, 4.21, 4.2, 4.06, 4.23, 4.48, 4.17, 4.66, 3.96, 4.01, 4.57, 4.03, 3.92, 4.01, 4.23, 4.15, 4.45, 4.36, 3.87, 3.56, 4.64, 4.46, 4.07, 4.33, 4.24, 3.81, 4.42, 4.52, 4.46, 4.31, 4.26, 4.5, 3.8, 4.0, 4.11, 4.38, 4.51, 4.35, 4.21, 3.93, 3.98, 3.83, 4.4, 4.28, 4.64, 3.94, 3.47, 4.66, 4.15, 3.76, 5.06, 4.41, 4.17, 4.29, 4.6, 4.33, 4.28, 4.19, 4.07, 4.42, 3.95, 4.39, 3.82, 3.92, 4.16, 4.47, 4.13, 3.94, 4.63, 4.02, 4.16, 4.15, 4.66, 4.24, 4.48, 3.99, 4.23, 4.23, 4.18, 4.11, 4.11, 4.31, 4.54, 4.07, 3.7, 4.06, 4.63, 4.13, 4.41, 4.12, 3.61, 4.43], "rd": [4.64, 4.77, 4.68, 4.44, 5.29, 4.29, 4.76, 4.86, 4.69, 5.19, 4.92, 4.23, 4.46, 4.19, 5.15, 5.09, 4.2, 4.78, 4.28, 5.07, 4.66, 4.52, 3.89, 4.73, 4.49, 4.84, 4.28, 4.34, 4.3, 4.96, 4.15, 4.82, 4.93, 4.4, 4.66, 4.38, 4.43, 4.04, 4.04, 4.87, 4.75, 4.27, 4.79, 4.44, 5.01, 4.14, 5.11, 4.07, 4.96, 4.56, 4.36, 4.95, 4.3, 4.56, 5.03, 3.79, 4.23, 5.02, 4.21, 4.07, 4.87, 4.74, 4.78, 4.54, 5.06, 4.71, 4.32, 3.78, 4.41, 4.55, 4.62, 4.21, 4.55, 4.51, 4.5, 5.15, 3.8, 4.92, 3.66, 4.25, 4.34, 4.23, 4.2, 4.94, 4.74, 4.33, 4.74, 4.06, 4.76, 4.78, 4.16, 4.88]}, "hist": {"bins": ["2~3", "3~4", "4~5", "5~6", "6~7", "7~8", "8~9", "9~10", "10~11", "11~12", "12~13", "13~14", "14~15", "15~16"], "hi": [69, 59, 78, 97, 102, 84, 51, 56, 24, 8, 12, 0, 3, 1], "lo": [834, 496, 419, 240, 99, 24, 4, 0, 0, 0, 0, 0, 0, 0]}, "grpMonth": {"hi": [6.27, 6.22, 6.34], "lo": [3.58, 3.61, 3.54]}, "donut": [91.24, 4.21, 4.55], "tot": 8844, "hiAvg": 6.28, "loAvg": 3.58, "gainAvg": 1.28, "allStop": 4.21};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const f=(v,d=2)=>Number(v).toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const hi=D.eq.filter(x=>x.high).sort((a,b)=>b.stop-a.stop), lo=D.eq.filter(x=>!x.high);
+const set=(id,t)=>document.getElementById(id).innerHTML=t;
+const top1=hi[0], low1=[...D.eq].sort((a,b)=>a.stop-b.stop)[0];
+
+set('kpis',[
+ ['정지로스 5% 이상 설비',hi.length+'대','30대 중 '+f(hi.length/30*100,0)+'% · '+hi.map(x=>x.id).join(', '),'red'],
+ ['7대 평균 정지로스율',f(D.hiAvg)+'%','목표 5.0% 대비 +'+f(D.hiAvg-5)+'%p','red'],
+ ['평균 가동율 향상폭(설비당)','+'+f(D.gainAvg)+'%p','5.0%로 개선 시',''],
+ ['3개월 Wafer 증가량',f(D.tot,0)+'매','월 '+f(D.tot/3,0)+'매 · 연 '+f(D.tot*4,0)+'매','green'],
+].map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v ${k[3]}">${k[1]}</div><div class="s">${k[2]}</div></div>`).join(''));
+
+set('summary',`<p>3개월 평균 정지로스율이 5% 이상인 설비는 <b>${hi.length}대</b>(${hi.map(x=>x.id).join(', ')})이며 평균 <b>${f(D.hiAvg)}%</b>입니다. 나머지 ${lo.length}대는 평균 ${f(D.loAvg)}%로 5% 미만을 유지하고 있습니다. 전체 30대 평균은 ${f(D.allStop)}%입니다.</p>
+<p>가장 큰 개선 대상은 <b>${top1.id}</b>(평균 ${f(top1.stop)}%, 5% 초과 ${top1.over}일)로, 5%까지 낮추면 가동율이 ${f(top1.gain)}%p 오르고 <b>${f(top1.wafer,0)}매</b>의 Wafer가 추가로 생산됩니다.</p>
+<p>7대 모두 5.0%로 개선하면 3개월간 <b class="green">${f(D.tot,0)}매</b>, 월 환산 약 ${f(D.tot/3,0)}매, 연 환산 약 ${f(D.tot*4,0)}매의 생산량 증가가 기대됩니다.</p>`);
+
+// table
+set('tbl','<tr><th>설비</th><th>평균 정지로스(%)</th><th>최대(%)</th><th>최소(%)</th><th>5% 초과 일수</th><th>개선폭(%p)</th><th>개선 후 가동율(%)</th><th>Wafer 증가(3개월)</th><th>월 환산</th></tr>'+
+ hi.map(x=>`<tr><td>${x.id}</td><td class="red">${f(x.stop)}</td><td>${f(x.smax,1)}</td><td>${f(x.smin,1)}</td><td>${x.over}일 (${f(x.over/92*100,0)}%)</td><td>${f(x.gain)}</td><td>${f(x.run+x.gain)}</td><td><b>${f(x.wafer,0)}</b></td><td>${f(x.wafer/3,0)}</td></tr>`).join('')+
+ `<tr><td><b>합계/평균</b></td><td>${f(D.hiAvg)}</td><td></td><td></td><td></td><td>${f(D.gainAvg)}</td><td></td><td><b>${f(D.tot,0)}</b></td><td>${f(D.tot/3,0)}</td></tr>`);
+set('tblnote','개선 후 가동율 = 현재 평균 가동율 + 개선폭. Wafer 증가 = 개선폭 ÷ 0.1 × 99매.');
+
+Chart.defaults.font.family='"Malgun Gothic",system-ui,sans-serif';
+function base(){Chart.defaults.color=css('--mute');Chart.defaults.borderColor=css('--line')}
+const C={blue:css('--blue'),red:css('--red'),green:css('--green'),amber:css('--amber'),gray:css('--gray')};
+base();
+const opt=(extra={})=>Object.assign({responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}},extra);
+const line5={type:'line',label:'기준 5%',borderColor:C.amber,borderDash:[6,4],borderWidth:2,pointRadius:0,fill:false};
+const ids=D.eq.map(x=>x.id);
+
+// c1
+const s1=[...D.eq].sort((a,b)=>b.stop-a.stop);
+new Chart('c1',{type:'bar',data:{labels:s1.map(x=>x.id),datasets:[{label:'평균 정지로스율(%)',data:s1.map(x=>x.stop),backgroundColor:s1.map(x=>x.high?C.red:C.gray)},{...line5,data:s1.map(()=>5)}]},options:opt({scales:{x:{ticks:{maxRotation:90,font:{size:10}}},y:{title:{display:true,text:'%'}}}})});
+set('n1',`빨간색 ${hi.length}대가 5% 기준선을 넘습니다. 최고 ${top1.id}(${f(top1.stop)}%), 최저 ${low1.id}(${f(low1.stop)}%)로 최대 ${f(top1.stop-low1.stop)}%p 차이가 납니다. 5%를 막 넘긴 설비(${hi[hi.length-1].id} ${f(hi[hi.length-1].stop)}%)는 소폭 개선으로도 기준을 충족할 수 있습니다.`);
+
+// c2
+new Chart('c2',{type:'bar',data:{labels:ids,datasets:[{label:'가동율',data:D.eq.map(x=>x.run),backgroundColor:C.blue},{label:'정지로스율',data:D.eq.map(x=>x.stop),backgroundColor:C.red},{label:'Run Down율',data:D.eq.map(x=>x.rd),backgroundColor:C.amber}]},options:opt({scales:{x:{stacked:true,ticks:{maxRotation:90,font:{size:10}}},y:{stacked:true,min:0,max:100,title:{display:true,text:'%'}}}})});
+set('n2',`모든 설비의 세 지표 합은 100%입니다. 가동율은 ${f(Math.min(...D.eq.map(x=>x.run)),1)}~${f(Math.max(...D.eq.map(x=>x.run)),1)}% 범위이고, Run Down율은 설비 간 차이가 작아(평균 ${f(D.donut[2],1)}%) 가동율 격차는 대부분 정지로스율에서 발생합니다.`);
+
+// c3
+new Chart('c3',{type:'bar',data:{labels:hi.map(x=>x.id),datasets:[{label:'현재 정지로스율(%)',data:hi.map(x=>x.stop),backgroundColor:C.red},{label:'개선 목표(%)',data:hi.map(()=>5),backgroundColor:C.green}]},options:opt({scales:{y:{beginAtZero:true,title:{display:true,text:'%'}}}})});
+set('n3',`7대 평균 ${f(D.hiAvg)}%를 5.0%로 낮추면 평균 ${f(D.gainAvg)}%p의 정지로스가 줄어듭니다. 개선폭이 가장 큰 설비는 ${top1.id}(${f(top1.gain)}%p), 가장 작은 설비는 ${hi[hi.length-1].id}(${f(hi[hi.length-1].gain)}%p)입니다.`);
+
+// c4 pareto
+const sw=[...hi].sort((a,b)=>b.wafer-a.wafer);let cum=0;const cp=sw.map(x=>(cum+=x.wafer,cum/D.tot*100));
+new Chart('c4',{data:{labels:sw.map(x=>x.id),datasets:[{type:'bar',label:'Wafer 증가량(매)',data:sw.map(x=>x.wafer),backgroundColor:C.green,yAxisID:'y'},{type:'line',label:'누적 기여도(%)',data:cp,borderColor:C.amber,backgroundColor:C.amber,yAxisID:'y1'}]},options:opt({scales:{y:{beginAtZero:true,title:{display:true,text:'매'}},y1:{position:'right',min:0,max:100,grid:{drawOnChartArea:false},title:{display:true,text:'%'}}}})});
+set('n4',`상위 3대(${sw.slice(0,3).map(x=>x.id).join(', ')})가 전체 증가량의 ${f(cp[2],0)}%를 차지합니다. 개선 우선순위는 이 순서로 두는 것이 효율적입니다. 합계 ${f(D.tot,0)}매.`);
+
+// c13 availability before/after
+new Chart('c13',{type:'bar',data:{labels:hi.map(x=>x.id),datasets:[{label:'개선 전 가동율(%)',data:hi.map(x=>x.run),backgroundColor:C.gray},{label:'개선 후 가동율(%)',data:hi.map(x=>+(x.run+x.gain).toFixed(2)),backgroundColor:C.blue}]},options:opt({scales:{y:{min:85,max:95,title:{display:true,text:'%'}}}})});
+set('n13',`개선 후 가동율은 평균 ${f(hi.reduce((a,x)=>a+x.run+x.gain,0)/hi.length)}%로, 개선 전 ${f(hi.reduce((a,x)=>a+x.run,0)/hi.length)}% 대비 ${f(D.gainAvg)}%p 높아져 나머지 설비 평균(${f(lo.reduce((a,x)=>a+x.run,0)/lo.length)}%)에 근접합니다. (Y축 85~95% 구간 확대)`);
+
+// c10 donut
+new Chart('c10',{type:'doughnut',data:{labels:['가동율','정지로스율','Run Down율'],datasets:[{data:D.donut,backgroundColor:[C.blue,C.red,C.amber],borderColor:css('--card')}]},options:opt({plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.label+': '+f(c.raw)+'%'}}}})});
+set('n10',`30대 평균 가동율 ${f(D.donut[0])}%, 정지로스율 ${f(D.donut[1])}%, Run Down율 ${f(D.donut[2])}%입니다. 손실의 ${f(D.donut[1]/(D.donut[1]+D.donut[2])*100,0)}%가 정지로스입니다.`);
+
+// c12 scatter
+new Chart('c12',{type:'scatter',data:{datasets:[{label:'5% 이상',data:hi.map(x=>({x:x.rd,y:x.stop,id:x.id})),backgroundColor:C.red,pointRadius:6},{label:'5% 미만',data:lo.map(x=>({x:x.rd,y:x.stop,id:x.id})),backgroundColor:C.gray,pointRadius:5}]},options:opt({scales:{x:{title:{display:true,text:'평균 Run Down율(%)'}},y:{title:{display:true,text:'평균 정지로스율(%)'}}},plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.raw.id+' (RD '+f(c.raw.x)+', 정지 '+f(c.raw.y)+')'}}}})});
+set('n12','Run Down율은 4.2~4.8% 좁은 범위에 모여 있고 정지로스율만 크게 퍼져 있습니다. 두 지표 간 뚜렷한 상관은 없어, 정지로스 개선은 Run Down과 별개로 접근해야 합니다.');
+
+// c11 over days
+const od=[...D.eq].sort((a,b)=>b.over-a.over);
+new Chart('c11',{type:'bar',data:{labels:od.map(x=>x.id),datasets:[{label:'5% 초과 일수 비중(%)',data:od.map(x=>+(x.over/92*100).toFixed(1)),backgroundColor:od.map(x=>x.high?C.red:C.gray)}]},options:opt({scales:{x:{ticks:{maxRotation:90,font:{size:10}}},y:{max:100,title:{display:true,text:'%'}}}})});
+set('n11',`5% 이상 설비는 3개월 중 ${f(Math.min(...hi.map(x=>x.over))/92*100,0)}~${f(Math.max(...hi.map(x=>x.over))/92*100,0)}%의 날에 5%를 넘었고, 5% 미만 설비는 최대 ${f(Math.max(...lo.map(x=>x.over))/92*100,0)}%입니다. 일회성이 아닌 상시적인 정지로스 문제입니다.`);
+
+// c5 daily
+new Chart('c5',{type:'line',data:{labels:D.D,datasets:[{label:'가동율',data:D.daily.run,borderColor:C.blue,yAxisID:'y',pointRadius:0},{label:'정지로스율',data:D.daily.stop,borderColor:C.red,yAxisID:'y1',pointRadius:0},{label:'Run Down율',data:D.daily.rd,borderColor:C.amber,yAxisID:'y1',pointRadius:0}]},options:opt({interaction:{mode:'index',intersect:false},scales:{x:{ticks:{maxTicksLimit:12}},y:{position:'left',title:{display:true,text:'가동율(%)'}},y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'손실률(%)'}}}})});
+set('n5',`30대 평균 일별 정지로스율은 ${f(Math.min(...D.daily.stop))}~${f(Math.max(...D.daily.stop))}%, 가동율은 ${f(Math.min(...D.daily.run))}~${f(Math.max(...D.daily.run))}% 범위에서 움직이며 뚜렷한 상승·하락 추세는 없습니다. 가동율과 정지로스율은 반대로 움직입니다. (가동율 좌축, 손실률 우축)`);
+
+// c6
+const pal=[C.red,C.blue,C.green,C.amber,'#8e5bd6','#17a2b8','#d6489a'];
+new Chart('c6',{type:'line',data:{labels:D.D,datasets:[...hi.map((x,i)=>({label:x.id,data:D.hiStop[x.id],borderColor:pal[i],borderWidth:1.2,pointRadius:0})),{...line5,data:D.D.map(()=>5)}]},options:opt({interaction:{mode:'index',intersect:false},scales:{x:{ticks:{maxTicksLimit:12}},y:{title:{display:true,text:'%'}}}})});
+set('n6','일별 변동폭이 커서 5% 아래로 내려오는 날도 있으나 대부분 5% 근처 이상에 머뭅니다. 점선(5%) 위 구간이 개선이 필요한 일자입니다.');
+
+// c8 hist
+new Chart('c8',{type:'bar',data:{labels:D.hist.bins,datasets:[{label:'5% 이상 설비(7대)',data:D.hist.hi,backgroundColor:C.red},{label:'5% 미만 설비(23대)',data:D.hist.lo,backgroundColor:C.gray}]},options:opt({scales:{x:{title:{display:true,text:'정지로스율 구간(%)'}},y:{title:{display:true,text:'설비-일 건수'}}}})});
+set('n8','5% 미만 그룹은 2~5% 구간에 집중되고, 5% 이상 그룹은 오른쪽(고손실 구간)으로 분포가 퍼져 꼬리가 깁니다. 개선은 이 꼬리 구간을 줄이는 것이 핵심입니다.');
+
+// c9
+const mn=['8월','9월','10월'];
+new Chart('c9',{type:'bar',data:{labels:mn,datasets:[{label:'5% 이상 7대',data:D.grpMonth.hi,backgroundColor:C.red},{label:'나머지 23대',data:D.grpMonth.lo,backgroundColor:C.gray},{...line5,data:mn.map(()=>5)}]},options:opt({scales:{y:{beginAtZero:true,title:{display:true,text:'%'}}}})});
+set('n9',`5% 이상 7대는 매월 ${f(Math.min(...D.grpMonth.hi))}~${f(Math.max(...D.grpMonth.hi))}%로 기준선을 넘고, 나머지 23대는 ${f(Math.min(...D.grpMonth.lo))}~${f(Math.max(...D.grpMonth.lo))}%로 안정적입니다. 월별 편차가 작아 일시적 이슈가 아니라 설비 고유의 문제로 보입니다.`);
+
+// heatmap
+const hm=document.getElementById('hm');hm.style.gridTemplateColumns='70px repeat(13,minmax(42px,1fr))';
+let h='<div class="h"></div>'+Array.from({length:13},(_,i)=>`<div class="h">${i+1}주</div>`).join('');
+const col=v=>{const t=Math.max(0,Math.min(1,(v-2)/(9-2)));const r=Math.round(255),g=Math.round(240-t*150),b=Math.round(225-t*170);return `rgb(${r},${g},${b})`};
+[...D.eq].sort((a,b)=>b.stop-a.stop).forEach(x=>{h+=`<div class="h" style="text-align:left;${x.high?'color:'+C.red+';font-weight:700':''}">${x.id}</div>`+x.weeks.map(v=>`<div style="background:${col(v)}">${f(v,1)}</div>`).join('')});
+hm.innerHTML=h;
+set('n7','주차별 평균 정지로스율(%)이며 진할수록 높습니다. 정렬은 평균 정지로스 내림차순이고 상단 7대(빨간 글씨)가 전 주차에 걸쳐 진하게 나타나 특정 시기가 아닌 전 기간 문제임을 확인할 수 있습니다. (13주차는 8일)');
+</script>
+</body>
+</html>
